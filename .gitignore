@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+GOOGLE_APPS_SCRIPT_URL=
+
+# excel temp locks
+~$*
 
 # vercel
 .vercel
