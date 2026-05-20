@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { AuthProvider } from "@/lib/auth-context";
+import { FYProvider } from "@/lib/fy-context";
 import "./globals.css";
 
 const geist = Geist({
@@ -22,7 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geist.variable} antialiased`}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <FYProvider>{children}</FYProvider>
+        </AuthProvider>
       </body>
     </html>
   );

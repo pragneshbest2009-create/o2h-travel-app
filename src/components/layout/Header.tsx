@@ -1,6 +1,7 @@
 "use client";
 
-import { getCurrentFY } from "@/lib/fy";
+import { FY_PERIODS } from "@/lib/fy";
+import { useFY } from "@/lib/fy-context";
 import { useAuth } from "@/lib/auth-context";
 
 interface HeaderProps {
@@ -10,7 +11,7 @@ interface HeaderProps {
 
 export function Header({ title, description }: HeaderProps) {
   const { user } = useAuth();
-  const fy = getCurrentFY();
+  const { selectedFY, setSelectedFY } = useFY();
 
   return (
     <header className="border-b border-slate-200 bg-white px-8 py-5">
@@ -22,9 +23,18 @@ export function Header({ title, description }: HeaderProps) {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-            {fy}
-          </span>
+          <select
+            value={selectedFY}
+            onChange={(e) => setSelectedFY(e.target.value)}
+            className="cursor-pointer appearance-none rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 border-0 outline-none focus:ring-2 focus:ring-blue-300"
+            title="Change fiscal year"
+          >
+            {FY_PERIODS.map((p) => (
+              <option key={p.fy} value={p.fy}>
+                {p.fy}
+              </option>
+            ))}
+          </select>
           <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-medium text-orange-700 capitalize">
             {user?.role}
           </span>

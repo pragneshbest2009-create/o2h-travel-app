@@ -16,6 +16,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { StatCard } from "@/components/ui/StatCard";
 import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth-context";
+import { useFY } from "@/lib/fy-context";
 import {
   ANALYTICS,
   FLIGHT_CALENDAR,
@@ -23,7 +24,7 @@ import {
   TRAVEL_REQUESTS,
 } from "@/lib/mock-data";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { getCurrentFY, FY_PERIODS } from "@/lib/fy";
+import { FY_PERIODS } from "@/lib/fy";
 
 const COST_CENTERS = ["All", "Chemistry", "Biology", "DMPK", "ADL", "General"];
 
@@ -66,17 +67,14 @@ function inPeriod(startDate: string, period: Period): boolean {
 }
 
 function periodLabel(period: Period): string {
-  const opt = PERIOD_OPTIONS.find(
-    (o) => o.value === (typeof period === "number" ? String(period) : period)
-  );
-  return opt?.label ?? "Full Year";
+  const v = typeof period === "number" ? String(period) : period;
+  return PERIOD_OPTIONS.find((o) => o.value === v)?.label ?? "Full Year";
 }
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const currentFY = getCurrentFY();
+  const { selectedFY } = useFY();
 
-  const [selectedFY, setSelectedFY] = useState(currentFY);
   const [period, setPeriod] = useState<Period>("full");
   const [costCenter, setCostCenter] = useState("All");
 
@@ -127,30 +125,13 @@ export default function DashboardPage() {
       title={`Hello, ${user?.name}`}
       description="Your travel & expense overview"
     >
-      {/* Filter Bar */}
+      {/* Filter Bar — FY is in the header; period + cost center here */}
       <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-500">FY</span>
-          <select
-            value={selectedFY}
-            onChange={(e) => setSelectedFY(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold"
-          >
-            {FY_PERIODS.map((p) => (
-              <option key={p.fy} value={p.fy}>
-                {p.fy}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-slate-500">Period</span>
           <select
             value={
-              typeof period === "number"
-                ? String(period)
-                : (period as string)
+              typeof period === "number" ? String(period) : (period as string)
             }
             onChange={(e) => setPeriod(parsePeriod(e.target.value))}
             className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
