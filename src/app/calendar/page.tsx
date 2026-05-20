@@ -12,26 +12,105 @@ import {
 } from "date-fns";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/Badge";
-import { FLIGHT_CALENDAR } from "@/lib/mock-data";
-import { formatDate } from "@/lib/utils";
+import { FLIGHT_CALENDAR, USERS } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth-context";
 
 type ViewMode = "daily" | "weekly" | "monthly" | "annual";
 
-const FILTERS = ["All", "Chemistry", "Biology", "UK", "USA", "Germany"];
+const ALL_DEPARTMENTS = [
+  "All",
+  "Chemistry",
+  "Biology",
+  "DMPK",
+  "ADL",
+  "General",
+  "Finance",
+  "HR",
+  "BD",
+];
+
+const ALL_COUNTRIES = [
+  "All",
+  "UK",
+  "USA",
+  "Germany",
+  "France",
+  "Singapore",
+  "Japan",
+  "South Korea",
+  "Netherlands",
+  "India",
+];
 
 export default function CalendarPage() {
+  const { user, isAdmin } = useAuth();
+  const isHod = user?.role === "hod";
+  const isManager = user?.role === "manager";
+  const canFilter = isAdmin || isHod || isManager;
+
   const [view, setView] = useState<ViewMode>("monthly");
-  const [filter, setFilter] = useState("All");
   const [month, setMonth] = useState(new Date(2026, 4, 1));
 
+  // Dept filter only meaningful for admin (HODs are locked to their dept)
+  const [deptFilter, setDeptFilter] = useState("All");
+  const [userFilter, setUserFilter] = useState("All");
+  const [countryFilter, setCountryFilter] = useState("All");
+
+  // Users shown in the User dropdown, scoped by role
+  const dropdownUsers = useMemo(() => {
+    if (isAdmin) {
+      return deptFilter === "All"
+        ? USERS
+        : USERS.filter((u) => u.department === deptFilter);
+    }
+    if (isHod) return USERS.filter((u) => u.department === user?.department);
+    if (isManager)
+      return USERS.filter(
+        (u) =>
+          u.reportingManager === user?.name || u.userId === user?.userId
+      );
+    return [];
+  }, [user, isAdmin, isHod, isManager, deptFilter]);
+
   const entries = useMemo(() => {
-    return FLIGHT_CALENDAR.filter((e) => {
-      if (filter === "All") return true;
-      if (["Chemistry", "Biology"].includes(filter))
-        return e.department === filter;
-      return e.country === filter;
-    });
-  }, [filter]);
+    let base = FLIGHT_CALENDAR;
+
+    // Role-based scope
+    if (!isAdmin) {
+      if (isHod) {
+        base = base.filter((e) => e.department === user?.department);
+      } else if (isManager) {
+        const allowed = new Set(
+          USERS.filter(
+            (u) =>
+              u.reportingManager === user?.name || u.userId === user?.userId
+          ).map((u) => u.userId)
+        );
+        base = base.filter((e) => allowed.has(e.userId));
+      } else {
+        // Employee / Finance: own entries only
+        return base.filter((e) => e.userId === user?.userId);
+      }
+    }
+
+    // Dropdown filters (available to admin/hod/manager)
+    if (isAdmin && deptFilter !== "All")
+      base = base.filter((e) => e.department === deptFilter);
+    if (userFilter !== "All")
+      base = base.filter((e) => e.userId === userFilter);
+    if (countryFilter !== "All")
+      base = base.filter((e) => e.country === countryFilter);
+
+    return base;
+  }, [
+    user,
+    isAdmin,
+    isHod,
+    isManager,
+    deptFilter,
+    userFilter,
+    countryFilter,
+  ]);
 
   const monthDays = eachDayOfInterval({
     start: startOfMonth(month),
@@ -48,24 +127,69 @@ export default function CalendarPage() {
       );
     });
 
+  const description = isAdmin
+    ? "Organisation-wide travel schedule"
+    : isHod
+    ? `${user?.department} department travel`
+    : isManager
+    ? "Your team's travel schedule"
+    : "Your personal travel schedule";
+
   return (
-    <AppShell
-      title="Travel Calendar"
-      description="Daily, weekly, monthly & annual views"
-    >
+    <AppShell title="Travel Calendar" description={description}>
+      {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
         <ViewTabs view={view} setView={setView} />
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-        >
-          {FILTERS.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </select>
+
+        {/* Department filter — admin only */}
+        {isAdmin && (
+          <select
+            value={deptFilter}
+            onChange={(e) => {
+              setDeptFilter(e.target.value);
+              setUserFilter("All");
+            }}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
+          >
+            {ALL_DEPARTMENTS.map((d) => (
+              <option key={d} value={d}>
+                {d === "All" ? "All Departments" : d}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* User filter — admin / hod / manager */}
+        {canFilter && (
+          <select
+            value={userFilter}
+            onChange={(e) => setUserFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
+          >
+            <option value="All">All Users</option>
+            {dropdownUsers.map((u) => (
+              <option key={u.userId} value={u.userId}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* Country filter — admin / hod / manager */}
+        {canFilter && (
+          <select
+            value={countryFilter}
+            onChange={(e) => setCountryFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm"
+          >
+            {ALL_COUNTRIES.map((c) => (
+              <option key={c} value={c}>
+                {c === "All" ? "All Countries" : c}
+              </option>
+            ))}
+          </select>
+        )}
+
         {view === "monthly" && (
           <input
             type="month"
@@ -79,6 +203,14 @@ export default function CalendarPage() {
         )}
       </div>
 
+      {/* Context note for employees */}
+      {!canFilter && (
+        <p className="mt-2 text-xs text-slate-400">
+          Showing your own travel plan only.
+        </p>
+      )}
+
+      {/* Monthly calendar grid */}
       {view === "monthly" && (
         <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-medium text-slate-500">
@@ -103,7 +235,7 @@ export default function CalendarPage() {
                     <div
                       key={t.pnr}
                       className="mt-0.5 truncate rounded bg-orange-100 px-1 text-orange-800"
-                      title={`${t.user} → ${t.country}`}
+                      title={`${t.user} · ${t.department} → ${t.country}`}
                     >
                       {t.user}
                     </div>
@@ -115,12 +247,14 @@ export default function CalendarPage() {
         </div>
       )}
 
+      {/* Table views */}
       {(view === "daily" || view === "weekly" || view === "annual") && (
         <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
                 <th className="px-4 py-3">Employee</th>
+                <th className="px-4 py-3">Department</th>
                 <th className="px-4 py-3">Country</th>
                 <th className="px-4 py-3">Duration</th>
                 <th className="px-4 py-3">Purpose</th>
@@ -129,6 +263,16 @@ export default function CalendarPage() {
               </tr>
             </thead>
             <tbody>
+              {entries.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-8 text-center text-slate-400"
+                  >
+                    No travel entries found.
+                  </td>
+                </tr>
+              )}
               {entries.map((e) => {
                 const start = parseISO(e.flightDate);
                 const end = e.returnDate ? parseISO(e.returnDate) : start;
@@ -139,8 +283,13 @@ export default function CalendarPage() {
                 return (
                   <tr key={e.pnr} className="border-b border-slate-50">
                     <td className="px-4 py-3 font-medium">{e.user}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        {e.department}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">{e.country}</td>
-                    <td className="px-4 py-3">{days} Days</td>
+                    <td className="px-4 py-3">{days} days</td>
                     <td className="px-4 py-3">{e.purpose}</td>
                     <td className="px-4 py-3 text-slate-600">
                       {e.airline} · {e.pnr}
@@ -155,10 +304,6 @@ export default function CalendarPage() {
           </table>
         </div>
       )}
-
-      <p className="mt-4 text-xs text-slate-400">
-        Filters: employee, department, country, project, FY, purpose (full filters in Phase 2)
-      </p>
     </AppShell>
   );
 }
